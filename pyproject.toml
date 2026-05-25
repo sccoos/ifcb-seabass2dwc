@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ifcb-seabass2dwc"
+version = "0.1.0"
+description = "Translate SeaBASS IFCB .sb files into Darwin Core Archive submission files."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "openpyxl>=3.1",
+  "suds-py3>=1.4",
+]
+
+[project.scripts]
+ifcb-seabass2dwc = "scripts.sb_to_dwc:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["scripts", "third_party"]
