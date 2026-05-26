@@ -313,11 +313,6 @@ def parse_args() -> argparse.Namespace:
         help="Darwin Core identificationReferences",
     )
     parser.add_argument(
-        "--disable-taxonomy-lookup",
-        action="store_true",
-        help="Skip WoRMS lookups for taxonRank and kingdom",
-    )
-    parser.add_argument(
         "--metadata-template",
         type=Path,
         default=None,
@@ -326,7 +321,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--include-taxonomic-coverage",
         action="store_true",
-        help="Include taxonomicCoverage in generated eml.xml using occurrence taxa",
+        help="Enable WoRMS taxonomy enrichment and include taxonomicCoverage in generated eml.xml",
     )
     return parser.parse_args()
 
@@ -767,7 +762,9 @@ def build_occurrence_rows(
         taxon_token = extract_taxon_token(scientific_name_id)
         taxon_counts[taxon_token] += 1
         occurrence_id = f"{event_id}_{taxon_token}_{taxon_counts[taxon_token]}"
-        taxon_rank, kingdom = fetch_taxonomy(aphia_id, args.disable_taxonomy_lookup)
+        taxon_rank, kingdom = fetch_taxonomy(
+            aphia_id, not args.include_taxonomic_coverage
+        )
         occurrence_rows.append(
             {
                 "eventID": event_id,
@@ -1310,7 +1307,7 @@ def main() -> None:
             date.today(),
             occurrence_rows,
             args.include_taxonomic_coverage,
-            args.disable_taxonomy_lookup,
+            not args.include_taxonomic_coverage,
         )
     write_archive(args.output_dir, archive_name)
 

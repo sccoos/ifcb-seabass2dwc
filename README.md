@@ -22,48 +22,59 @@
 ### Example run:
 `ifcb-seabass2dwc /path/to/seabass-files --output-dir generated-files --metadata-template scripts/METADATA-TEMPLATE_ifcb-seabass2dwc.xlsx`
 * The metadata template workbook is optional, but required for `eml.xml`, including at least one `creator`, `provider`, and `contact` role in `personnel`.
-* Add `--disable-taxonomy-lookup` to skip WoRMS lookups.
-* Add `--include-taxonomic-coverage` to include `taxonomicCoverage` in `eml.xml`.
+* Add `--include-taxonomic-coverage` to enable WoRMS taxonomy enrichment and include `taxonomicCoverage` in `eml.xml`.
 
 ### Metadata template usage
 * The metadata template workbook is required to generate a proper `eml.xml` metadata file.
 * `eml.xml` is an expected part of the Darwin Core package produced by this tool.
 * Without the metadata template, the script can still generate `event.csv`, `occurrence.csv`, and `meta.xml`, but not a complete `eml.xml`.
 
-* The metadata template workbook must include two sheets:
-* `general`
-* `personnel`
+* The metadata template workbook must include these sheets:
 
-* The `general` sheet is read as key/value pairs.
-* The following `general` fields are required for `eml.xml` generation:
-* `title` - dataset title written to `eml.xml`
-* `abstract` - abstract text written to `eml.xml`
-* `geographicDescription` - text description for EML geographic coverage
-* `identificationReferences` - citation or workflow reference written to `occurrence.csv`
-* `publisherOrganization` - publisher organization name
-* `publisherEmail` - publisher contact email
-* `publisherURL` - publisher URL
+| Sheet | Use |
+| --- | --- |
+| `general` | key/value metadata used for `eml.xml` and `occurrence.csv` |
+| `personnel` | table of people used to populate EML party sections |
 
-* The `personnel` sheet is read as a table of people.
-* Expected `personnel` columns are:
-* `givenName`
-* `middleInitial`
-* `surName`
-* `organizationName`
-* `electronicMailAddress`
-* `positionName`
-* `role`
+* Required `general` fields:
 
-* At least one `personnel` row is required for each of these roles:
-* `creator`
-* `provider`
-* `contact`
+| Field | Use |
+| --- | --- |
+| `title` | dataset title written to `eml.xml` |
+| `abstract` | abstract text written to `eml.xml` |
+| `geographicDescription` | text description for EML geographic coverage |
+| `identificationReferences` | citation or workflow reference written to `occurrence.csv` |
+| `publisherOrganization` | publisher organization name |
+| `publisherEmail` | publisher contact email |
+| `publisherURL` | publisher URL |
 
-* Role mapping in `eml.xml` is:
-* `creator` -> `creator`
-* `provider` -> `metadataProvider`
-* `contact` -> `contact`
-* any other role -> `associatedParty`
+* Expected `personnel` columns:
 
-* `positionName` is written directly from the workbook when present.
+| Column | Use |
+| --- | --- |
+| `givenName` | person's given name |
+| `middleInitial` | optional middle initial appended to `givenName` |
+| `surName` | person's surname |
+| `organizationName` | organization written to EML |
+| `electronicMailAddress` | email written to EML |
+| `positionName` | position or title written to EML when present |
+| `role` | determines how the person is mapped into EML |
+
+* Required `personnel` roles:
+
+| Role | Requirement |
+| --- | --- |
+| `creator` | at least one row required |
+| `provider` | at least one row required |
+| `contact` | at least one row required |
+
+* `personnel.role` mapping:
+
+| Role value | EML output |
+| --- | --- |
+| `creator` | `creator` |
+| `provider` | `metadataProvider` |
+| `contact` | `contact` |
+| any other value | `associatedParty` |
+
 * For `associatedParty`, the original `role` value is also written to the EML `<role>` element.
