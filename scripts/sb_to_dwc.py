@@ -419,6 +419,10 @@ def load_metadata_template(path: Path) -> MetadataTemplate:
         raise ValueError(
             "Metadata template requires at least one personnel entry with role 'provider'"
         )
+    if not contacts:
+        raise ValueError(
+            "Metadata template requires at least one personnel entry with role 'contact'"
+        )
 
     required_general_fields = [
         "title",
