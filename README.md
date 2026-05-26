@@ -1,4 +1,4 @@
-# IFCB2DwC file conversion tool
+# IFCB SeaBASS2DwC file conversion tool
 * Converts SeaBASS-formatted IFCB `.sb` files into Darwin Core Archive submission files.
 * A metadata template workbook, `METADATA-TEMPLATE_ifcb-seabass2dwc.xlsx`, is included with this repository for optional `eml.xml` generation.
 
