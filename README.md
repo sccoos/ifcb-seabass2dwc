@@ -23,3 +23,4 @@
 `ifcb-seabass2dwc /path/to/seabass-files --output-dir generated-files --metadata-template scripts/METADATA-TEMPLATE_ifcb-seabass2dwc.xlsx`
 * The metadata template workbook is optional, but required for `eml.xml`.
 * Add `--disable-taxonomy-lookup` to skip WoRMS lookups.
+* Add `--include-taxonomic-coverage` to include `taxonomicCoverage` in `eml.xml`.

@@ -248,6 +248,7 @@ UNMATCHED_OCCURRENCE_FIELDS = [
 _APHIA_CLIENT = None
 _APHIA_CLIENT_INITIALIZED = False
 _TAXONOMY_CACHE: dict[str, Tuple[str, str]] = {}
+_CLASSIFICATION_CACHE: dict[str, list["TaxonomicClassificationNode"]] = {}
 
 
 @dataclass
@@ -273,6 +274,13 @@ class MetadataTemplate:
     providers: list[dict[str, str]]
     contacts: list[dict[str, str]]
     associated_parties: list[dict[str, str]]
+
+
+@dataclass(frozen=True)
+class TaxonomicClassificationNode:
+    taxon_rank_name: str
+    taxon_rank_value: str
+    taxon_id: str
 
 
 def parse_args() -> argparse.Namespace:
@@ -314,6 +322,11 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help="Path to the metadata template workbook used to generate eml.xml",
+    )
+    parser.add_argument(
+        "--include-taxonomic-coverage",
+        action="store_true",
+        help="Include taxonomicCoverage in generated eml.xml using occurrence taxa",
     )
     return parser.parse_args()
 
@@ -501,6 +514,58 @@ def extract_aphia_id(scientific_name_id: str) -> Optional[str]:
     return aphia_id or None
 
 
+def get_aphia_value(record: Any, *field_names: str) -> str:
+    for field_name in field_names:
+        value = None
+        if isinstance(record, dict):
+            value = record.get(field_name)
+        else:
+            value = getattr(record, field_name, None)
+        if value is None:
+            continue
+        cleaned = str(value).strip()
+        if cleaned and cleaned.lower() != "none":
+            return cleaned
+    return ""
+
+
+def get_aphia_child(record: Any) -> Any:
+    if isinstance(record, dict):
+        return record.get("child")
+    return getattr(record, "child", None)
+
+
+def classification_record_to_chain(record: Any) -> list[TaxonomicClassificationNode]:
+    chain: list[TaxonomicClassificationNode] = []
+    current = record
+    seen_ids: set[str] = set()
+
+    while current is not None:
+        taxon_id = get_aphia_value(current, "AphiaID")
+        rank_name = get_aphia_value(current, "rank")
+        rank_value = get_aphia_value(current, "scientificname")
+
+        if taxon_id in seen_ids or not rank_value:
+            break
+        seen_ids.add(taxon_id)
+
+        chain.append(
+            TaxonomicClassificationNode(
+                taxon_rank_name=rank_name,
+                taxon_rank_value=rank_value,
+                taxon_id=taxon_id,
+            )
+        )
+
+        current = get_aphia_child(current)
+
+    for index, node in enumerate(chain):
+        if node.taxon_rank_name.lower() == "kingdom":
+            return chain[index:]
+
+    return chain
+
+
 def fetch_taxonomy(aphia_id: str, disabled: bool) -> Tuple[str, str]:
     global _APHIA_CLIENT
     global _APHIA_CLIENT_INITIALIZED
@@ -549,6 +614,59 @@ def fetch_taxonomy(aphia_id: str, disabled: bool) -> Tuple[str, str]:
         getattr(record, "kingdom", "") or "",
     )
     return _TAXONOMY_CACHE[aphia_id]
+
+
+def fetch_taxonomic_classification(
+    aphia_id: str, disabled: bool
+) -> list[TaxonomicClassificationNode]:
+    global _APHIA_CLIENT
+    global _APHIA_CLIENT_INITIALIZED
+    global _CLASSIFICATION_CACHE
+
+    if disabled:
+        return []
+
+    if aphia_id in _CLASSIFICATION_CACHE:
+        return _CLASSIFICATION_CACHE[aphia_id]
+
+    try:
+        from suds.client import Client  # noqa: F401
+        from third_party.worms import Aphia
+    except ImportError:
+        print(
+            "Warning: worms.py dependency 'suds' is not installed; leaving taxonomicCoverage blank.",
+            file=sys.stderr,
+        )
+        _CLASSIFICATION_CACHE[aphia_id] = []
+        return _CLASSIFICATION_CACHE[aphia_id]
+
+    try:
+        if not _APHIA_CLIENT_INITIALIZED:
+            _APHIA_CLIENT = Aphia()
+            _APHIA_CLIENT_INITIALIZED = True
+
+        if _APHIA_CLIENT is None or getattr(_APHIA_CLIENT, "client", None) is None:
+            _CLASSIFICATION_CACHE[aphia_id] = []
+            return _CLASSIFICATION_CACHE[aphia_id]
+
+        classification_record = _APHIA_CLIENT.get_aphia_classification_by_id(
+            int(aphia_id)
+        )
+    except Exception as exc:  # pragma: no cover - network/runtime dependent
+        print(
+            f"Warning: worms.py classification lookup failed for AphiaID {aphia_id}: {exc}",
+            file=sys.stderr,
+        )
+        _CLASSIFICATION_CACHE[aphia_id] = []
+        return _CLASSIFICATION_CACHE[aphia_id]
+
+    if not classification_record:
+        _CLASSIFICATION_CACHE[aphia_id] = []
+        return _CLASSIFICATION_CACHE[aphia_id]
+
+    chain = classification_record_to_chain(classification_record)
+    _CLASSIFICATION_CACHE[aphia_id] = chain
+    return _CLASSIFICATION_CACHE[aphia_id]
 
 
 def parse_sb_file(path: Path) -> SeaBASSFile:
@@ -919,11 +1037,56 @@ def build_party_element(parent: ET.Element, tag: str, person: dict[str, str]) ->
         append_text_element(party, "role", person["role"])
 
 
-def maybe_add_taxonomic_coverage(coverage: ET.Element) -> None:
-    """Placeholder hook for future EML taxonomicCoverage generation."""
-    # Intentionally left as a no-op until taxonomicCoverage requirements
-    # and source data rules are finalized.
-    _ = coverage
+def maybe_add_taxonomic_coverage(
+    coverage: ET.Element,
+    occurrence_rows: list[dict[str, str]],
+    enabled: bool,
+    taxonomy_lookup_disabled: bool,
+) -> None:
+    if not enabled:
+        return
+
+    seen_aphia_ids: set[str] = set()
+    chains: list[list[TaxonomicClassificationNode]] = []
+
+    for row in occurrence_rows:
+        aphia_id = extract_aphia_id(row.get("scientificNameID", "").strip())
+        if not aphia_id or aphia_id in seen_aphia_ids:
+            continue
+        seen_aphia_ids.add(aphia_id)
+        chain = fetch_taxonomic_classification(aphia_id, taxonomy_lookup_disabled)
+        if chain:
+            chains.append(chain)
+
+    if not chains:
+        return
+
+    taxonomic_coverage = ET.SubElement(coverage, "taxonomicCoverage")
+    for chain in chains:
+        parent_element: Optional[ET.Element] = None
+        for node in chain:
+            container = (
+                taxonomic_coverage if parent_element is None else parent_element
+            )
+            classification = ET.SubElement(container, "taxonomicClassification")
+            append_text_element(
+                classification, "taxonRankName", node.taxon_rank_name.title()
+            )
+            append_text_element(
+                classification, "taxonRankValue", node.taxon_rank_value
+            )
+            append_text_element(
+                classification,
+                "commonName",
+                node.taxon_rank_value,
+            )
+            taxon_id = ET.SubElement(
+                classification,
+                "taxonId",
+                {"provider": "http://marinespecies.org"},
+            )
+            taxon_id.text = node.taxon_id
+            parent_element = classification
 
 
 def build_eml_xml(
@@ -931,9 +1094,9 @@ def build_eml_xml(
     aggregate: AggregateMetadata,
     archive_name: str,
     run_date: date,
-    output_dir: Path,
-    event_record_count: int,
-    occurrence_record_count: int,
+    occurrence_rows: list[dict[str, str]],
+    include_taxonomic_coverage: bool,
+    taxonomy_lookup_disabled: bool,
 ) -> ET.ElementTree:
     attributes = {
         "xmlns:eml": "eml://ecoinformatics.org/eml-2.1.1",
@@ -1019,7 +1182,12 @@ def build_eml_xml(
         str(aggregate.south_bounding_coordinate or ""),
     )
 
-    maybe_add_taxonomic_coverage(coverage)
+    maybe_add_taxonomic_coverage(
+        coverage,
+        occurrence_rows,
+        include_taxonomic_coverage,
+        taxonomy_lookup_disabled,
+    )
 
     temporal_coverage = ET.SubElement(coverage, "temporalCoverage")
     range_of_dates = ET.SubElement(temporal_coverage, "rangeOfDates")
@@ -1058,9 +1226,9 @@ def write_eml_xml(
     aggregate: AggregateMetadata,
     archive_name: str,
     run_date: date,
-    output_dir: Path,
-    event_record_count: int,
-    occurrence_record_count: int,
+    occurrence_rows: list[dict[str, str]],
+    include_taxonomic_coverage: bool,
+    taxonomy_lookup_disabled: bool,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tree = build_eml_xml(
@@ -1068,9 +1236,9 @@ def write_eml_xml(
         aggregate,
         archive_name,
         run_date,
-        output_dir,
-        event_record_count,
-        occurrence_record_count,
+        occurrence_rows,
+        include_taxonomic_coverage,
+        taxonomy_lookup_disabled,
     )
     if hasattr(ET, "indent"):
         ET.indent(tree, space="  ")
@@ -1136,9 +1304,9 @@ def main() -> None:
             aggregate_metadata,
             archive_name,
             date.today(),
-            args.output_dir,
-            len(event_rows),
-            len(occurrence_rows),
+            occurrence_rows,
+            args.include_taxonomic_coverage,
+            args.disable_taxonomy_lookup,
         )
     write_archive(args.output_dir, archive_name)
 
