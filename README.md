@@ -1,16 +1,13 @@
 # IFCB SeaBASS2DwC file conversion tool
 * Converts SeaBASS-formatted IFCB `.sb` files into Darwin Core Archive submission files.
 * A metadata template workbook, `METADATA-TEMPLATE_ifcb-seabass2dwc.xlsx`, is included with this repository for optional `eml.xml` generation.
+* Contact/author: ibrunjes@ucsd.edu
+* Functionality depends on valid .sb files containing the expected fields for a SeaBASS plankton data submission, as well as the usage of taxonomic definitions derived from the World Register of Marine Species.
 
 # Project incentive
-* The tool is created in the interest of extending FAIR access of IFCB data collected and formatted for SeaBASS, PACE's validation data repository. The maintainers, SCCOOS/CalCOFI, are a particpant of the Pace Validation Science Teams. Our data is collected underway on quarterly cruises along the California coast.
+* The tool is created in the interest of extending FAIR access of IFCB data collected and formatted for SeaBASS, PACE's validation data repository. The maintainers, SCCOOS/CalCOFI, are a particpant of the Pace Validation Science Teams. Our data is collected underway on quarterly cruises along the California coast, but the tool should be usable by any teams producing validated plankton & particles datasets for SeaBASS.
 * You can preview that data on our IFCB dashboard located here: https://ifcb.caloos.org/timeline?dataset=calcofi-cruises-underway
 <img width="3456" height="2316" alt="Screenshot 2026-05-26 at 11-06-07 CalCOFI Cruises (underway)" src="https://github.com/user-attachments/assets/3ddd0f30-97b8-4e04-8664-5a5b269992ce" />
-
-
-### Before running script
-* Review the input `.sb` file or file set before conversion.
-* Fill out the metadata template workbook before running the script if you want `eml.xml`.
 
 ### Installation:
 * install directly from a local source checkout
@@ -21,12 +18,11 @@
 
 ### Example run:
 `ifcb-seabass2dwc /path/to/seabass-files --output-dir generated-files --metadata-template scripts/METADATA-TEMPLATE_ifcb-seabass2dwc.xlsx`
-* The metadata template workbook is optional, but required for `eml.xml`, including at least one `creator`, `provider`, and `contact` role in `personnel`.
-* Add `--include-taxonomic-coverage` to enable WoRMS taxonomy enrichment and include `taxonomicCoverage` in `eml.xml`.
+* The metadata template workbook is optional (recommended), but required for `eml.xml`, see usage below.
+* CLI option `--include-taxonomic-coverage` enables WoRMS taxonomy enrichment to include `taxonomicCoverage` in `eml.xml`.
 
 ### Metadata template usage
-* The metadata template workbook is required to generate a proper `eml.xml` metadata file.
-* `eml.xml` is an expected part of the Darwin Core package produced by this tool.
+* The metadata template workbook should be provided to generate `eml.xml` metadata file, and is required in a Darwin Core submission.
 * Without the metadata template, the script can still generate `event.csv`, `occurrence.csv`, and `meta.xml`, but not a complete `eml.xml`.
 
 * The metadata template workbook must include these sheets:
@@ -53,28 +49,22 @@
 | Column | Use |
 | --- | --- |
 | `givenName` | person's given name |
-| `middleInitial` | optional middle initial appended to `givenName` |
+| `middleInitial` | optional middle initial |
 | `surName` | person's surname |
-| `organizationName` | organization written to EML |
-| `electronicMailAddress` | email written to EML |
-| `positionName` | position or title written to EML when present |
-| `role` | determines how the person is mapped into EML |
+| `organizationName` | person's organizational affiliation |
+| `electronicMailAddress` | person's email |
+| `positionName` | person's position or title |
+| `role` | an EML defined role, see usage below |
 
 * Required `personnel` roles:
 
 | Role | Requirement |
 | --- | --- |
-| `creator` | at least one row required |
-| `provider` | at least one row required |
-| `contact` | at least one row required |
+| `creator` | at least one creator required |
+| `provider` | at least one provider required |
+| `contact` | at least one contact required |
 
-* `personnel.role` mapping:
-
-| Role value | EML output |
-| --- | --- |
-| `creator` | `creator` |
-| `provider` | `metadataProvider` |
-| `contact` | `contact` |
-| any other value | `associatedParty` |
-
-* For `associatedParty`, the original `role` value is also written to the EML `<role>` element.
+### File output and validation:
+* The tool will output to the specified output directory the following files: occurrence.csv, event.csv, meta.xml, and conditionally eml.xml
+* A zipped archive of these files, which is the expected package type for submission is also created
+* Validation of the .zip archive package is recommended using this tool: https://www.gbif.org/tool/81281/gbif-data-validator
