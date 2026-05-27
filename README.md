@@ -1,8 +1,8 @@
 # IFCB SeaBASS2DwC file conversion tool
 * Converts SeaBASS-formatted IFCB `.sb` files into Darwin Core Archive submission files.
 * A metadata template workbook, `METADATA-TEMPLATE_ifcb-seabass2dwc.xlsx`, is included with this repository for optional `eml.xml` generation.
-* Contact/author: ibrunjes@ucsd.edu
 * Functionality depends on valid .sb files containing the expected fields for a SeaBASS plankton data submission, as well as the usage of taxonomic definitions derived from the World Register of Marine Species.
+* Contact/author: ibrunjes@ucsd.edu
 
 # Project incentive
 * The tool is created in the interest of extending FAIR access of IFCB data collected and formatted for SeaBASS, PACE's validation data repository. The maintainers, SCCOOS/CalCOFI, are a particpant of the Pace Validation Science Teams. Our data is collected underway on quarterly cruises along the California coast, but the tool should be usable by any teams producing validated plankton & particles datasets for SeaBASS.
